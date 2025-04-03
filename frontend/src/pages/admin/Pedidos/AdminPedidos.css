@@ -1,0 +1,122 @@
+/* AdminPedidos.css */
+.admin-pedidos-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.admin-pedidos-container h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+}
+
+.filtro-container {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filtro-select {
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.pedidos-list {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background-color: #f2f2f2;
+  font-weight: 500;
+}
+
+.status-select {
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  cursor: pointer;
+}
+
+.status-select.pendente {
+  background-color: #f39c12;
+  color: white;
+}
+
+.status-select.pago {
+  background-color: #3498db;
+  color: white;
+}
+
+.status-select.enviado {
+  background-color: #9b59b6;
+  color: white;
+}
+
+.status-select.entregue {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.status-select.cancelado {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.detalhes-btn {
+  padding: 6px 12px;
+  background-color: #34495e;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.detalhes-btn:hover {
+  background-color: #2c3e50;
+}
+
+.sem-pedidos {
+  text-align: center;
+  padding: 20px;
+  color: #7f8c8d;
+}
+
+.admin-error {
+  color: #e74c3c;
+  text-align: center;
+  padding: 20px;
+  font-weight: bold;
+}
+
+.admin-loading {
+  text-align: center;
+  padding: 20px;
+  color: #7f8c8d;
+}
+
+@media (max-width: 768px) {
+  .filtro-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  th, td {
+    padding: 8px;
+    font-size: 0.9rem;
+  }
+}
