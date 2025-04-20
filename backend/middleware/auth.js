@@ -1,34 +1,74 @@
+// Middleware de autenticação para proteger rotas
 const jwt = require('jsonwebtoken');
 const Usuario = require('../models/Usuario');
+const logger = require('../utils/logger');
 
-const auth = async (req, res, next) => {
+// Middleware para proteger rotas que requerem autenticação
+const protect = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ msg: 'Token não fornecido' });
-    }
+    let token;
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const usuario = await Usuario.findOne({ _id: decoded.id });
+    // Verificar se o token está presente no header Authorization
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith('Bearer')
+    ) {
+      try {
+        // Obter token do header
+        token = req.headers.authorization.split(' ')[1];
 
-    if (!usuario) {
-      return res.status(401).json({ msg: 'Usuário não encontrado' });
-    }
+        // Verificar token
+        const decoded = jwt.verify(
+          token, 
+          process.env.JWT_SECRET || 'jwt_secret_key_default'
+        );
 
-    req.token = token;
-    req.usuario = usuario;
-    next();
-  } catch (err) {
-    console.error(err.message);
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ msg: 'Token inválido' });
+        // Obter usuário do token (excluindo a senha)
+        req.usuario = await Usuario.findById(decoded.id).select('-senha');
+
+        if (!req.usuario) {
+          logger.warn('Token válido, mas usuário não encontrado');
+          return res.status(401).json({
+            success: false,
+            message: 'Não autorizado, usuário não encontrado'
+          });
+        }
+
+        next();
+      } catch (error) {
+        logger.error(`Erro na verificação do token: ${error.message}`);
+        res.status(401).json({
+          success: false,
+          message: 'Não autorizado, token inválido'
+        });
+      }
+    } else {
+      logger.warn('Tentativa de acesso sem token de autenticação');
+      res.status(401).json({
+        success: false,
+        message: 'Não autorizado, sem token'
+      });
     }
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ msg: 'Token expirado' });
-    }
-    res.status(500).send('Erro no servidor');
+  } catch (error) {
+    logger.error(`Erro no middleware de autenticação: ${error.message}`);
+    res.status(500).json({
+      success: false,
+      message: 'Erro no servidor. Tente novamente mais tarde.'
+    });
   }
 };
 
-module.exports = auth;
+// Middleware para verificar se o usuário é administrador
+const admin = (req, res, next) => {
+  if (req.usuario && req.usuario.isAdmin) {
+    next();
+  } else {
+    logger.warn(`Tentativa de acesso a rota de admin por usuário não autorizado: ${req.usuario ? req.usuario.email : 'desconhecido'}`);
+    res.status(403).json({
+      success: false,
+      message: 'Não autorizado como administrador'
+    });
+  }
+};
+
+module.exports = { protect, admin };
