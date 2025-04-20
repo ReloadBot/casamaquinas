@@ -1,9 +1,8 @@
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
 
 // Configuração base da API
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: `${process.env.REACT_APP_API_URL}/api`,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -29,8 +28,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      const { logout } = useAuth();
-      logout();
+      localStorage.removeItem('token');
       window.location.href = '/login?sessionExpired=true';
     }
     return Promise.reject(error);
