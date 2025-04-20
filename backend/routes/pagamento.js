@@ -1,13 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const mercadopago = require('mercadopago');
+const { mercadopago } = require('../config/mercadopago');
 const Pedido = require('../models/Pedido');
 const auth = require('../middleware/auth');
-
-// Configuração do Mercado Pago
-mercadopago.configure({
-  access_token: process.env.MP_ACCESS_TOKEN
-});
+const logger = require('../utils/logger');
 
 // Rota para criar preferência de pagamento
 router.post('/checkout', auth, async (req, res) => {
@@ -37,10 +33,11 @@ router.post('/checkout', auth, async (req, res) => {
     };
 
     const response = await mercadopago.preferences.create(preference);
+    logger.info(`Preferência de pagamento criada para o pedido ${pedidoId}`);
     res.json({ id: response.body.id });
 
   } catch (err) {
-    console.error(err);
+    logger.error(`Erro no processamento do pagamento: ${err.message}`);
     res.status(500).send('Erro no processamento do pagamento');
   }
 });
@@ -71,11 +68,12 @@ router.post('/webhook', async (req, res) => {
       }
 
       await Pedido.findByIdAndUpdate(pedidoId, { status: novoStatus });
+      logger.info(`Status do pedido ${pedidoId} atualizado para ${novoStatus}`);
     }
 
     res.status(200).send();
   } catch (err) {
-    console.error(err);
+    logger.error(`Erro no webhook: ${err.message}`);
     res.status(500).send('Erro no webhook');
   }
 });

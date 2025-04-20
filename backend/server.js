@@ -1,15 +1,26 @@
+// Importar o módulo de configuração do Mercado Pago no server.js
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const connectDB = require('./config/db');
+const { configureMercadoPago } = require('./config/mercadopago');
+const logger = require('./utils/logger');
 
 // Inicializar aplicação
 const app = express();
 
 // Conectar ao banco de dados
 connectDB();
+
+// Configurar Mercado Pago
+try {
+  configureMercadoPago();
+  logger.info('Mercado Pago configurado com sucesso');
+} catch (err) {
+  logger.error(`Erro ao configurar Mercado Pago: ${err.message}`);
+}
 
 // Middlewares
 app.use(cors());
@@ -35,6 +46,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Tratamento de erros
 app.use((err, req, res, next) => {
+  logger.error(`Erro no servidor: ${err.message}`);
   console.error(err.stack);
   res.status(500).send('Algo quebrou!');
 });
@@ -42,5 +54,5 @@ app.use((err, req, res, next) => {
 // Iniciar servidor
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  logger.info(`Servidor rodando na porta ${PORT}`);
 });
