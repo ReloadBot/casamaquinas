@@ -11,11 +11,11 @@ const logger = require('./logger');
  * @param {Object} user - Objeto do usuário
  * @returns {String} Token JWT
  */
-const generateToken = (user) => {
+const generateToken = (id, tipo) => {
   return jwt.sign(
     { 
-      id: user._id,
-      role: user.role 
+      id: id,
+      tipo: tipo 
     },
     process.env.JWT_SECRET,
     { 

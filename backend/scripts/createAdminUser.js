@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
@@ -29,10 +28,21 @@ const adminData = {
 async function createAdminUser() {
   try {
     // Verificar se já existe um usuário com este email
-    const existingUser = await Usuario.findOne({ email: adminData.email });
+    const existingUser = await Usuario.findOne({ email: adminData.email }).select('+senha');
     
     if (existingUser) {
       console.log('Um usuário administrador com este email já existe.');
+      console.log('Atualizando a senha do usuário existente...');
+      
+      // Atualizar a senha do usuário existente
+      existingUser.senha = adminData.senha;
+      await existingUser.save();
+      
+      console.log('Senha do usuário administrador atualizada com sucesso!');
+      console.log('Email:', adminData.email);
+      console.log('Senha:', adminData.senha);
+      console.log('IMPORTANTE: Altere esta senha após o primeiro login por motivos de segurança.');
+      
       process.exit(0);
     }
     
