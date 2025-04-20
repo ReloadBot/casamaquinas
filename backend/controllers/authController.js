@@ -1,230 +1,147 @@
-// Arquivo de correção para autenticação de administrador
-// Este arquivo deve ser salvo como authController.js no diretório controllers do backend
-
-const Usuario = require('../models/Usuario');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const logger = require('../utils/logger');
+const Usuario = require('../models/Usuario');
+const Cliente = require('../models/Cliente');
+const { generateToken } = require('../utils/auth');
 
-// @desc    Autenticar usuário e gerar token
-// @route   POST /api/usuarios/login
-// @access  Public
-const loginUsuario = async (req, res) => {
+const register = async (req, res) => {
+  const { nome, email, senha, tipo, cpf, telefone, endereco, cidade, estado, cep } = req.body;
+
   try {
-    const { email, senha } = req.body;
-
-    // Verificar se o email e senha foram fornecidos
-    if (!email || !senha) {
-      logger.warn('Tentativa de login sem email ou senha');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Por favor, forneça email e senha' 
-      });
+    let usuario = await Usuario.findOne({ email });
+    if (usuario) {
+      return res.status(400).json({ msg: 'Usuário já existe' });
     }
 
-    // Verificar se o usuário existe
-    const usuario = await Usuario.findOne({ email }).select('+senha');
-    
-    if (!usuario) {
-      logger.warn(`Tentativa de login com email não cadastrado: ${email}`);
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Falha no login. Verifique suas credenciais.' 
-      });
-    }
-
-    // Verificar se a senha está correta
-    const senhaCorreta = await bcrypt.compare(senha, usuario.senha);
-    
-    if (!senhaCorreta) {
-      logger.warn(`Tentativa de login com senha incorreta para: ${email}`);
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Falha no login. Verifique suas credenciais.' 
-      });
-    }
-
-    // Gerar token JWT
-    const token = jwt.sign(
-      { id: usuario._id, isAdmin: usuario.isAdmin },
-      process.env.JWT_SECRET || 'jwt_secret_key_default',
-      { expiresIn: '30d' }
-    );
-
-    // Log de login bem-sucedido
-    logger.info(`Login bem-sucedido: ${email}`);
-
-    // Retornar dados do usuário e token
-    res.status(200).json({
-      success: true,
-      _id: usuario._id,
-      nome: usuario.nome,
-      email: usuario.email,
-      isAdmin: usuario.isAdmin,
-      token
-    });
-  } catch (error) {
-    logger.error(`Erro no login: ${error.message}`);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Erro no servidor. Tente novamente mais tarde.' 
-    });
-  }
-};
-
-// @desc    Registrar um novo usuário
-// @route   POST /api/usuarios
-// @access  Public
-const registrarUsuario = async (req, res) => {
-  try {
-    const { nome, email, senha } = req.body;
-
-    // Verificar se todos os campos foram fornecidos
-    if (!nome || !email || !senha) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Por favor, preencha todos os campos' 
-      });
-    }
-
-    // Verificar se o usuário já existe
-    const usuarioExiste = await Usuario.findOne({ email });
-
-    if (usuarioExiste) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Usuário já cadastrado' 
-      });
-    }
-
-    // Criar hash da senha
     const salt = await bcrypt.genSalt(10);
-    const senhaHash = await bcrypt.hash(senha, salt);
+    const hashedSenha = await bcrypt.hash(senha, salt);
 
-    // Criar usuário
-    const usuario = await Usuario.create({
+    usuario = new Usuario({
       nome,
       email,
-      senha: senhaHash,
-      isAdmin: false // Usuários registrados normalmente não são administradores
+      senha: hashedSenha,
+      tipo: tipo || 'cliente'
     });
 
-    // Gerar token JWT
-    const token = jwt.sign(
-      { id: usuario._id, isAdmin: usuario.isAdmin },
-      process.env.JWT_SECRET || 'jwt_secret_key_default',
-      { expiresIn: '30d' }
-    );
+    await usuario.save();
 
-    // Log de registro bem-sucedido
-    logger.info(`Novo usuário registrado: ${email}`);
+    if (tipo === 'cliente' || !tipo) {
+      const cliente = new Cliente({
+        usuario_id: usuario._id,
+        cpf,
+        telefone,
+        endereco,
+        cidade,
+        estado,
+        cep
+      });
+      await cliente.save();
+    }
 
-    // Retornar dados do usuário e token
+    const token = generateToken(usuario._id, usuario.tipo);
+
     res.status(201).json({
-      success: true,
-      _id: usuario._id,
-      nome: usuario.nome,
-      email: usuario.email,
-      isAdmin: usuario.isAdmin,
-      token
+      token,
+      usuario: {
+        id: usuario._id,
+        nome: usuario.nome,
+        email: usuario.email,
+        tipo: usuario.tipo
+      }
     });
-  } catch (error) {
-    logger.error(`Erro no registro: ${error.message}`);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Erro no servidor. Tente novamente mais tarde.' 
-    });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Erro no servidor');
   }
 };
 
-// @desc    Obter perfil do usuário
-// @route   GET /api/usuarios/perfil
-// @access  Private
-const getPerfilUsuario = async (req, res) => {
-  try {
-    const usuario = await Usuario.findById(req.usuario.id);
+const login = async (req, res) => {
+  const { email, senha } = req.body;
 
+  try {
+    let usuario = await Usuario.findOne({ email });
     if (!usuario) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Usuário não encontrado' 
-      });
+      return res.status(400).json({ msg: 'Credenciais inválidas' });
     }
 
-    res.status(200).json({
-      success: true,
-      _id: usuario._id,
-      nome: usuario.nome,
-      email: usuario.email,
-      isAdmin: usuario.isAdmin
+    const isMatch = await bcrypt.compare(senha, usuario.senha);
+    if (!isMatch) {
+      return res.status(400).json({ msg: 'Credenciais inválidas' });
+    }
+
+    const token = generateToken(usuario._id, usuario.tipo);
+
+    res.json({
+      token,
+      usuario: {
+        id: usuario._id,
+        nome: usuario.nome,
+        email: usuario.email,
+        tipo: usuario.tipo
+      }
     });
-  } catch (error) {
-    logger.error(`Erro ao obter perfil: ${error.message}`);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Erro no servidor. Tente novamente mais tarde.' 
-    });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Erro no servidor');
   }
 };
 
-// @desc    Atualizar perfil do usuário
-// @route   PUT /api/usuarios/perfil
-// @access  Private
-const atualizarPerfilUsuario = async (req, res) => {
+const getUsuario = async (req, res) => {
   try {
-    const usuario = await Usuario.findById(req.usuario.id);
-
+    const usuario = await Usuario.findById(req.usuario.id).select('-senha');
     if (!usuario) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Usuário não encontrado' 
-      });
+      return res.status(404).json({ msg: 'Usuário não encontrado' });
+    }
+    res.json(usuario);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Erro no servidor');
+  }
+};
+
+const updateUsuario = async (req, res) => {
+  const { nome, email, senha } = req.body;
+
+  try {
+    let usuario = await Usuario.findById(req.usuario.id);
+    if (!usuario) {
+      return res.status(404).json({ msg: 'Usuário não encontrado' });
     }
 
-    // Atualizar campos
-    usuario.nome = req.body.nome || usuario.nome;
-    usuario.email = req.body.email || usuario.email;
+    if (email && email !== usuario.email) {
+      const existingUser = await Usuario.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ msg: 'Email já está em uso' });
+      }
+      usuario.email = email;
+    }
 
-    // Se a senha foi fornecida, atualizar
-    if (req.body.senha) {
+    if (nome) usuario.nome = nome;
+    if (senha) {
       const salt = await bcrypt.genSalt(10);
-      usuario.senha = await bcrypt.hash(req.body.senha, salt);
+      usuario.senha = await bcrypt.hash(senha, salt);
     }
 
-    // Salvar alterações
-    const usuarioAtualizado = await usuario.save();
+    await usuario.save();
 
-    // Gerar novo token JWT
-    const token = jwt.sign(
-      { id: usuarioAtualizado._id, isAdmin: usuarioAtualizado.isAdmin },
-      process.env.JWT_SECRET || 'jwt_secret_key_default',
-      { expiresIn: '30d' }
-    );
-
-    // Log de atualização bem-sucedida
-    logger.info(`Perfil atualizado: ${usuario.email}`);
-
-    // Retornar dados atualizados
-    res.status(200).json({
-      success: true,
-      _id: usuarioAtualizado._id,
-      nome: usuarioAtualizado.nome,
-      email: usuarioAtualizado.email,
-      isAdmin: usuarioAtualizado.isAdmin,
-      token
+    res.json({
+      id: usuario._id,
+      nome: usuario.nome,
+      email: usuario.email,
+      tipo: usuario.tipo
     });
-  } catch (error) {
-    logger.error(`Erro ao atualizar perfil: ${error.message}`);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Erro no servidor. Tente novamente mais tarde.' 
-    });
+
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Erro no servidor');
   }
 };
 
 module.exports = {
-  loginUsuario,
-  registrarUsuario,
-  getPerfilUsuario,
-  atualizarPerfilUsuario
+  register,
+  login,
+  getUsuario,
+  updateUsuario
 };
