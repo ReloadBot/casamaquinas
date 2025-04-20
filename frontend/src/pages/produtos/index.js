@@ -1,170 +1,165 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
-import ProductCard from '../../../components/ProductCard';
-import SidebarCategorias from '../../../components/SidebarCategorias';
-import './ProdutosPage.css';
+import './styles/index.css';
 
-const ProdutosPage = () => {
+const Produtos = () => {
   const [produtos, setProdutos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [paginaAtual, setPaginaAtual] = useState(1);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [filtros, setFiltros] = useState({
-    busca: '',
-    categoria: '',
-    subcategoria: '',
-    ordenar: 'recentes'
-  });
-
-  const location = useLocation();
-  const navigate = useNavigate();
+  const [filtro, setFiltro] = useState('');
+  const [categoria, setCategoria] = useState('');
+  const [ordenacao, setOrdenacao] = useState('nome');
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const params = {
-      busca: searchParams.get('busca') || '',
-      categoria: searchParams.get('categoria') || '',
-      subcategoria: searchParams.get('subcategoria') || '',
-      ordenar: searchParams.get('ordenar') || 'recentes',
-      pagina: searchParams.get('pagina') || 1
-    };
-
-    setFiltros({
-      busca: params.busca,
-      categoria: params.categoria,
-      subcategoria: params.subcategoria,
-      ordenar: params.ordenar
-    });
-    setPaginaAtual(Number(params.pagina));
-
     const fetchProdutos = async () => {
       try {
         setLoading(true);
-        const response = await axios.get('/api/produtos', {
-          params: {
-            busca: params.busca,
-            categoria: params.categoria,
-            subcategoria: params.subcategoria,
-            ordenar: params.ordenar,
-            pagina: params.pagina,
-            limite: 12
-          }
-        });
-
-        setProdutos(response.data.produtos);
-        setTotalPaginas(response.data.totalPaginas);
-      } catch (error) {
-        console.error('Erro ao buscar produtos:', error);
-      } finally {
+        let url = `${process.env.REACT_APP_API_URL}/api/produtos`;
+        
+        // Adicionar parâmetros de filtro se existirem
+        const params = new URLSearchParams();
+        if (filtro) params.append('nome', filtro);
+        if (categoria) params.append('categoria', categoria);
+        params.append('sort', ordenacao);
+        
+        if (params.toString()) {
+          url += `?${params.toString()}`;
+        }
+        
+        const res = await axios.get(url);
+        setProdutos(res.data);
+        setLoading(false);
+      } catch (err) {
+        console.error('Erro ao carregar produtos:', err);
         setLoading(false);
       }
     };
 
+    const fetchCategorias = async () => {
+      try {
+        const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/categorias`);
+        setCategorias(res.data);
+      } catch (err) {
+        console.error('Erro ao carregar categorias:', err);
+      }
+    };
+
     fetchProdutos();
-  }, [location.search]);
+    fetchCategorias();
+  }, [filtro, categoria, ordenacao]);
 
-  const handleFiltroChange = (novosFiltros) => {
-    const params = new URLSearchParams();
-    
-    if (novosFiltros.busca) params.set('busca', novosFiltros.busca);
-    if (novosFiltros.categoria) params.set('categoria', novosFiltros.categoria);
-    if (novosFiltros.subcategoria) params.set('subcategoria', novosFiltros.subcategoria);
-    if (novosFiltros.ordenar && novosFiltros.ordenar !== 'recentes') params.set('ordenar', novosFiltros.ordenar);
-    
-    navigate(`/produtos?${params.toString()}`);
+  const handleFiltroChange = (e) => {
+    setFiltro(e.target.value);
   };
 
-  const handlePaginaChange = (pagina) => {
-    const params = new URLSearchParams(location.search);
-    params.set('pagina', pagina);
-    navigate(`/produtos?${params.toString()}`);
+  const handleCategoriaChange = (e) => {
+    setCategoria(e.target.value);
   };
+
+  const handleOrdenacaoChange = (e) => {
+    setOrdenacao(e.target.value);
+  };
+
+  if (loading) {
+    return (
+      <div className="container">
+        <div className="text-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Carregando...</span>
+          </div>
+          <p className="mt-2">Carregando produtos...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="produtos-page-container">
-      <SidebarCategorias 
-        categoriaAtiva={filtros.categoria}
-        subcategoriaAtiva={filtros.subcategoria}
-        onCategoriaClick={(categoriaId) => handleFiltroChange({
-          ...filtros,
-          categoria: categoriaId,
-          subcategoria: ''
-        })}
-        onSubcategoriaClick={(subcategoriaId) => handleFiltroChange({
-          ...filtros,
-          subcategoria: subcategoriaId
-        })}
-      />
-
-      <div className="produtos-content">
-        <div className="filtros-container">
-          <div className="search-box">
+    <div className="produtos-page">
+      <div className="container">
+        <h1 className="mb-4">Produtos</h1>
+        
+        {/* Filtros */}
+        <div className="row mb-4">
+          <div className="col-md-4 mb-3">
             <input
               type="text"
+              className="form-control"
               placeholder="Buscar produtos..."
-              value={filtros.busca}
-              onChange={(e) => setFiltros({...filtros, busca: e.target.value})}
-              onKeyPress={(e) => e.key === 'Enter' && handleFiltroChange({...filtros, busca: e.target.value})}
+              value={filtro}
+              onChange={handleFiltroChange}
             />
-            <button 
-              onClick={() => handleFiltroChange({...filtros, busca: filtros.busca})}
-              className="search-button"
-            >
-              <i className="fas fa-search"></i>
-            </button>
           </div>
-
-          <div className="ordenar-container">
-            <label>Ordenar por:</label>
+          <div className="col-md-4 mb-3">
             <select
-              value={filtros.ordenar}
-              onChange={(e) => handleFiltroChange({...filtros, ordenar: e.target.value})}
+              className="form-select"
+              value={categoria}
+              onChange={handleCategoriaChange}
             >
-              <option value="recentes">Mais recentes</option>
-              <option value="preco-asc">Preço: menor para maior</option>
-              <option value="preco-desc">Preço: maior para menor</option>
-              <option value="nome-asc">Nome: A-Z</option>
-              <option value="nome-desc">Nome: Z-A</option>
+              <option value="">Todas as categorias</option>
+              {categorias.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-md-4 mb-3">
+            <select
+              className="form-select"
+              value={ordenacao}
+              onChange={handleOrdenacaoChange}
+            >
+              <option value="nome">Nome (A-Z)</option>
+              <option value="-nome">Nome (Z-A)</option>
+              <option value="preco">Preço (menor-maior)</option>
+              <option value="-preco">Preço (maior-menor)</option>
+              <option value="-createdAt">Mais recentes</option>
             </select>
           </div>
         </div>
-
-        {loading ? (
-          <div className="loading-container">Carregando produtos...</div>
-        ) : produtos.length === 0 ? (
-          <div className="no-products">
+        
+        {/* Lista de produtos */}
+        {produtos.length === 0 ? (
+          <div className="alert alert-info">
             Nenhum produto encontrado com os filtros selecionados.
           </div>
         ) : (
-          <>
-            <div className="produtos-grid">
-              {produtos.map(produto => (
-                <ProductCard 
-                  key={produto._id} 
-                  product={produto} 
-                />
-              ))}
-            </div>
-
-            {totalPaginas > 1 && (
-              <div className="paginacao">
-                {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(num => (
-                  <button
-                    key={num}
-                    onClick={() => handlePaginaChange(num)}
-                    className={paginaAtual === num ? 'active' : ''}
-                  >
-                    {num}
-                  </button>
-                ))}
+          <div className="row">
+            {produtos.map((produto) => (
+              <div key={produto._id} className="col-md-3 mb-4">
+                <div className="card product-card h-100">
+                  {produto.emPromocao && (
+                    <span className="badge bg-danger position-absolute top-0 end-0 m-2">
+                      Oferta
+                    </span>
+                  )}
+                  <img
+                    src={produto.imagem || "https://via.placeholder.com/300"}
+                    className="card-img-top"
+                    alt={produto.nome}
+                  />
+                  <div className="card-body d-flex flex-column">
+                    <h5 className="card-title">{produto.nome}</h5>
+                    <p className="card-text">{produto.descricao.substring(0, 100)}...</p>
+                    <p className="card-text price mt-auto">
+                      R$ {produto.preco.toFixed(2)}
+                    </p>
+                    <Link
+                      to={`/produtos/${produto._id}`}
+                      className="btn btn-primary w-100 mt-2"
+                    >
+                      Ver Detalhes
+                    </Link>
+                  </div>
+                </div>
               </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
       </div>
     </div>
   );
 };
 
-export default ProdutosPage;
+export default Produtos;
