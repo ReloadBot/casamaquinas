@@ -1,3 +1,5 @@
+// Implementação da solução recomendada para o authController.js
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Usuario = require('../models/Usuario');
@@ -5,7 +7,13 @@ const Cliente = require('../models/Cliente');
 const { generateToken } = require('../utils/auth');
 
 const register = async (req, res) => {
-  const { nome, email, senha, tipo, cpf, telefone, endereco, cidade, estado, cep } = req.body;
+  // Modificação para aceitar tanto 'senha' quanto 'password'
+  const { nome, email, senha, password, tipo, cpf, telefone, endereco, cidade, estado, cep } = req.body;
+  const senhaFinal = senha || password; // Aceitar qualquer um dos campos
+
+  if (!senhaFinal) {
+    return res.status(400).json({ msg: 'Por favor, forneça uma senha' });
+  }
 
   try {
     let usuario = await Usuario.findOne({ email });
@@ -14,7 +22,7 @@ const register = async (req, res) => {
     }
 
     const salt = await bcrypt.genSalt(10);
-    const hashedSenha = await bcrypt.hash(senha, salt);
+    const hashedSenha = await bcrypt.hash(senhaFinal, salt);
 
     usuario = new Usuario({
       nome,
@@ -57,7 +65,13 @@ const register = async (req, res) => {
 };
 
 const login = async (req, res) => {
-  const { email, senha } = req.body;
+  // Modificação para aceitar tanto 'senha' quanto 'password'
+  const { email, senha, password } = req.body;
+  const senhaFinal = senha || password; // Aceitar qualquer um dos campos
+
+  if (!email || !senhaFinal) {
+    return res.status(400).json({ msg: 'Por favor, forneça email e senha' });
+  }
 
   try {
     let usuario = await Usuario.findOne({ email });
@@ -65,7 +79,7 @@ const login = async (req, res) => {
       return res.status(400).json({ msg: 'Credenciais inválidas' });
     }
 
-    const isMatch = await bcrypt.compare(senha, usuario.senha);
+    const isMatch = await bcrypt.compare(senhaFinal, usuario.senha);
     if (!isMatch) {
       return res.status(400).json({ msg: 'Credenciais inválidas' });
     }
@@ -102,7 +116,9 @@ const getUsuario = async (req, res) => {
 };
 
 const updateUsuario = async (req, res) => {
-  const { nome, email, senha } = req.body;
+  // Modificação para aceitar tanto 'senha' quanto 'password'
+  const { nome, email, senha, password } = req.body;
+  const senhaFinal = senha || password; // Aceitar qualquer um dos campos
 
   try {
     let usuario = await Usuario.findById(req.usuario.id);
@@ -119,9 +135,9 @@ const updateUsuario = async (req, res) => {
     }
 
     if (nome) usuario.nome = nome;
-    if (senha) {
+    if (senhaFinal) {
       const salt = await bcrypt.genSalt(10);
-      usuario.senha = await bcrypt.hash(senha, salt);
+      usuario.senha = await bcrypt.hash(senhaFinal, salt);
     }
 
     await usuario.save();
