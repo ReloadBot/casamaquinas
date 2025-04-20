@@ -28,7 +28,7 @@ const adminData = {
 async function createAdminUser() {
   try {
     // Verificar se já existe um usuário com este email
-    const existingUser = await Usuario.findOne({ email: adminData.email }).select('+senha');
+    const existingUser = await Usuario.findOne({ email: adminData.email });
     
     if (existingUser) {
       console.log('Um usuário administrador com este email já existe.');

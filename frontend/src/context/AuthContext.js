@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
             }
           };
 
-          const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/me`, config);
+          const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/usuario`, config);
           setUser(res.data);
         } catch (err) {
           localStorage.removeItem('token');
@@ -58,7 +58,7 @@ export const AuthProvider = ({ children }) => {
       
       return res.data;
     } catch (err) {
-      setError(err.response?.data?.message || 'Erro ao registrar. Tente novamente.');
+      setError(err.response?.data?.msg || 'Erro ao registrar. Tente novamente.');
       throw err;
     }
   };
@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }) => {
       
       return res.data;
     } catch (err) {
-      setError(err.response?.data?.message || 'Credenciais inválidas');
+      setError(err.response?.data?.msg || 'Credenciais inválidas');
       throw err;
     }
   };
@@ -109,7 +109,7 @@ export const AuthProvider = ({ children }) => {
       };
 
       const res = await axios.put(
-        `${process.env.REACT_APP_API_URL}/api/auth/profile`,
+        `${process.env.REACT_APP_API_URL}/api/auth/usuario`,
         userData,
         config
       );
@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }) => {
       setUser(res.data);
       return res.data;
     } catch (err) {
-      setError(err.response?.data?.message || 'Erro ao atualizar perfil');
+      setError(err.response?.data?.msg || 'Erro ao atualizar perfil');
       throw err;
     }
   };
@@ -132,7 +132,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateProfile,
     isAuthenticated: !!token,
-    isAdmin: user?.role === 'admin'
+    isAdmin: user?.tipo === 'admin'
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
