@@ -1,48 +1,44 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const logger = require('../utils/logger');
-
-let mongoServer;
 
 const connectDB = async () => {
   try {
-    // Criar instância do MongoDB em memória
-    mongoServer = await MongoMemoryServer.create();
-    const mongoUri = mongoServer.getUri();
+    // Usar a URI do MongoDB local definida no arquivo .env
+    const mongoUri = process.env.DB_URI;
     
-    // Conectar ao MongoDB em memória
+    if (!mongoUri) {
+      throw new Error('A variável de ambiente DB_URI não está definida no arquivo .env');
+    }
+    
+    // Conectar ao MongoDB local
     const conn = await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
-
-    logger.info(`MongoDB em memória conectado: ${conn.connection.host}`);
-
+    
+    logger.info(`MongoDB local conectado: ${conn.connection.host}`);
+    
     // Event listeners para monitoramento da conexão
     mongoose.connection.on('connected', () => {
-      logger.info('Mongoose conectado ao DB em memória');
+      logger.info('Mongoose conectado ao DB local');
     });
-
+    
     mongoose.connection.on('error', (err) => {
       logger.error(`Erro na conexão do Mongoose: ${err.message}`);
     });
-
+    
     mongoose.connection.on('disconnected', () => {
-      logger.warn('Mongoose desconectado do DB em memória');
+      logger.warn('Mongoose desconectado do DB local');
     });
-
+    
     // Captura eventos de encerramento para fechar a conexão graciosamente
     process.on('SIGINT', async () => {
       await mongoose.connection.close();
-      if (mongoServer) {
-        await mongoServer.stop();
-      }
-      logger.info('Conexão com MongoDB em memória fechada devido ao encerramento da aplicação');
+      logger.info('Conexão com MongoDB local fechada devido ao encerramento da aplicação');
       process.exit(0);
     });
-
   } catch (err) {
-    logger.error(`Erro ao conectar ao MongoDB em memória: ${err.message}`);
+    logger.error(`Erro ao conectar ao MongoDB local: ${err.message}`);
     process.exit(1);
   }
 };
