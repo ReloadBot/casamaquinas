@@ -12,7 +12,6 @@ const Cliente = sequelize.define('Cliente', {
   usuario_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    unique: true,
     references: {
       model: 'usuarios',
       key: 'id'
@@ -20,43 +19,37 @@ const Cliente = sequelize.define('Cliente', {
   },
   cpf: {
     type: DataTypes.STRING(14),
-    allowNull: false,
+    allowNull: true,
     unique: true
   },
   telefone: {
     type: DataTypes.STRING(20),
-    allowNull: false
+    allowNull: true
   },
   endereco: {
     type: DataTypes.STRING(255),
-    allowNull: false
-  },
-  complemento: {
-    type: DataTypes.STRING(100),
     allowNull: true
   },
   cidade: {
     type: DataTypes.STRING(100),
-    allowNull: false
+    allowNull: true
   },
   estado: {
     type: DataTypes.STRING(2),
-    allowNull: false
+    allowNull: true
   },
   cep: {
-    type: DataTypes.STRING(10),
-    allowNull: false
-  },
-  data_cadastro: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
+    type: DataTypes.STRING(9),
+    allowNull: true
   }
 }, {
   tableName: 'clientes',
-  timestamps: false
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
-// Definir associação com Usuario
-Cliente.belongsTo(Usuario, { foreignKey: 'usuario_id' });
+// Associação com o modelo Usuario
+Cliente.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuario' });
 
 module.exports = Cliente;

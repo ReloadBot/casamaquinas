@@ -1,3 +1,4 @@
+// Controlador de autenticação atualizado para Sequelize
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Usuario = require('../models/Usuario');
@@ -14,23 +15,24 @@ const register = async (req, res) => {
   }
   
   try {
-    let usuario = await Usuario.findOne({ email });
-    if (usuario) {
+    // Verificar se o usuário já existe
+    const usuarioExistente = await Usuario.findOne({ where: { email } });
+    if (usuarioExistente) {
       return res.status(400).json({ msg: 'Usuário já existe' });
     }
     
-    usuario = new Usuario({
+    // Criar novo usuário
+    const usuario = await Usuario.create({
       nome,
       email,
-      senha: senhaFinal, // O middleware pre-save no modelo fará o hash
+      senha: senhaFinal, // O hook beforeCreate no modelo fará o hash
       tipo: tipo || 'cliente'
     });
     
-    await usuario.save();
-    
+    // Se for cliente, criar registro na tabela de clientes
     if (tipo === 'cliente' || !tipo) {
-      const cliente = new Cliente({
-        usuario_id: usuario._id,
+      await Cliente.create({
+        usuario_id: usuario.id,
         cpf,
         telefone,
         endereco,
@@ -38,15 +40,15 @@ const register = async (req, res) => {
         estado,
         cep
       });
-      await cliente.save();
     }
     
-    const token = generateToken(usuario._id, usuario.tipo);
+    // Gerar token JWT
+    const token = generateToken(usuario.id, usuario.tipo);
     
     res.status(201).json({
       token,
       user: {
-        id: usuario._id,
+        id: usuario.id,
         nome: usuario.nome,
         email: usuario.email,
         tipo: usuario.tipo
@@ -68,22 +70,28 @@ const login = async (req, res) => {
   }
   
   try {
-    let usuario = await Usuario.findOne({ email }).select('+senha');
+    // Buscar usuário pelo email
+    const usuario = await Usuario.findOne({ where: { email } });
     if (!usuario) {
       return res.status(400).json({ msg: 'Credenciais inválidas' });
     }
     
-    const isMatch = await bcrypt.compare(senhaFinal, usuario.senha);
+    // Verificar senha
+    const isMatch = await usuario.compararSenha(senhaFinal);
     if (!isMatch) {
       return res.status(400).json({ msg: 'Credenciais inválidas' });
     }
     
-    const token = generateToken(usuario._id, usuario.tipo);
+    // Atualizar último acesso
+    await usuario.update({ ultimo_acesso: new Date() });
+    
+    // Gerar token JWT
+    const token = generateToken(usuario.id, usuario.tipo);
     
     res.json({
       token,
       user: {
-        id: usuario._id,
+        id: usuario.id,
         nome: usuario.nome,
         email: usuario.email,
         tipo: usuario.tipo
@@ -97,10 +105,15 @@ const login = async (req, res) => {
 
 const getUsuario = async (req, res) => {
   try {
-    const usuario = await Usuario.findById(req.usuario.id).select('-senha');
+    // Buscar usuário pelo ID
+    const usuario = await Usuario.findByPk(req.usuario.id, {
+      attributes: { exclude: ['senha'] }
+    });
+    
     if (!usuario) {
       return res.status(404).json({ msg: 'Usuário não encontrado' });
     }
+    
     res.json(usuario);
   } catch (err) {
     console.error(err.message);
@@ -114,29 +127,29 @@ const updateUsuario = async (req, res) => {
   const senhaFinal = senha || password; // Aceitar qualquer um dos campos
   
   try {
-    let usuario = await Usuario.findById(req.usuario.id);
+    // Buscar usuário pelo ID
+    const usuario = await Usuario.findByPk(req.usuario.id);
     if (!usuario) {
       return res.status(404).json({ msg: 'Usuário não encontrado' });
     }
     
+    // Verificar se o email já está em uso por outro usuário
     if (email && email !== usuario.email) {
-      const existingUser = await Usuario.findOne({ email });
+      const existingUser = await Usuario.findOne({ where: { email } });
       if (existingUser) {
         return res.status(400).json({ msg: 'Email já está em uso' });
       }
-      usuario.email = email;
     }
     
-    if (nome) usuario.nome = nome;
-    if (senhaFinal) {
-      const salt = await bcrypt.genSalt(10);
-      usuario.senha = await bcrypt.hash(senhaFinal, salt);
-    }
-    
-    await usuario.save();
+    // Atualizar dados do usuário
+    await usuario.update({
+      nome: nome || usuario.nome,
+      email: email || usuario.email,
+      senha: senhaFinal || undefined // Se não fornecido, não atualiza
+    });
     
     res.json({
-      id: usuario._id,
+      id: usuario.id,
       nome: usuario.nome,
       email: usuario.email,
       tipo: usuario.tipo

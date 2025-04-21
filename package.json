@@ -1,11 +1,15 @@
 {
-  "name": "casamaquinas-backend",
+  "name": "casamaquinas",
   "version": "1.0.0",
-  "description": "Backend para o sistema Casa das Máquinas",
-  "main": "server.js",
+  "description": "Sistema Casa das Máquinas - Frontend e Backend unificados",
+  "main": "server/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node server/server.js",
+    "server": "nodemon server/server.js",
+    "client": "cd client && npm start",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "cd client && npm run build",
+    "install-all": "npm install && cd client && npm install",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -22,6 +26,7 @@
     "validator": "^13.9.0"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "mongodb-memory-server": "^10.1.4",
     "nodemon": "^2.0.22"
   }
