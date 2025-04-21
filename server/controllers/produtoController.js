@@ -1,6 +1,7 @@
 // Exemplo de controlador atualizado para Produtos usando Sequelize
 const { Produto, Categoria, Subcategoria, ProdutoImagem } = require('../models');
 const logger = require('../utils/logger');
+const { Sequelize } = require('sequelize');
 
 // @desc    Listar todos os produtos
 // @route   GET /api/produtos
@@ -66,7 +67,7 @@ exports.listarProdutos = async (req, res) => {
 // @desc    Obter um produto pelo ID
 // @route   GET /api/produtos/:id
 // @access  Público
-exports.getProduto = async (req, res) => {
+exports.obterProduto = async (req, res) => {
   try {
     const produto = await Produto.findByPk(req.params.id, {
       include: [
@@ -239,7 +240,7 @@ exports.atualizarProduto = async (req, res) => {
 // @desc    Excluir um produto
 // @route   DELETE /api/produtos/:id
 // @access  Privado/Admin
-exports.excluirProduto = async (req, res) => {
+exports.deletarProduto = async (req, res) => {
   try {
     // Verificar se é admin
     if (req.usuario.tipo !== 'admin') {
