@@ -1,56 +1,62 @@
-const mongoose = require('mongoose');
+// Modelo Cliente usando Sequelize
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
+const Usuario = require('./Usuario');
 
-const ClienteSchema = new mongoose.Schema({
+const Cliente = sequelize.define('Cliente', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   usuario_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Usuario',
-    required: true,
-    unique: true
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    unique: true,
+    references: {
+      model: 'usuarios',
+      key: 'id'
+    }
   },
   cpf: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
+    type: DataTypes.STRING(14),
+    allowNull: false,
+    unique: true
   },
   telefone: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING(20),
+    allowNull: false
   },
   endereco: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING(255),
+    allowNull: false
   },
   complemento: {
-    type: String,
-    trim: true
+    type: DataTypes.STRING(100),
+    allowNull: true
   },
   cidade: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING(100),
+    allowNull: false
   },
   estado: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 2
+    type: DataTypes.STRING(2),
+    allowNull: false
   },
   cep: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING(10),
+    allowNull: false
   },
   data_cadastro: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
+}, {
+  tableName: 'clientes',
+  timestamps: false
 });
 
-// Index para melhorar consultas por CPF e usuário
-ClienteSchema.index({ cpf: 1 });
-ClienteSchema.index({ usuario_id: 1 });
+// Definir associação com Usuario
+Cliente.belongsTo(Usuario, { foreignKey: 'usuario_id' });
 
-module.exports = mongoose.model('Cliente', ClienteSchema);
+module.exports = Cliente;

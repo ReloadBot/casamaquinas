@@ -1,68 +1,74 @@
-const mongoose = require('mongoose');
+// Modelo Produto usando Sequelize
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
+const Categoria = require('./Categoria');
+const Subcategoria = require('./Subcategoria');
 
-const ProdutoSchema = new mongoose.Schema({
+const Produto = sequelize.define('Produto', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   nome: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 100
+    type: DataTypes.STRING(100),
+    allowNull: false
   },
   descricao: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 2000
+    type: DataTypes.TEXT,
+    allowNull: false
   },
   preco: {
-    type: Number,
-    required: true,
-    min: 0
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false
   },
   estoque: {
-    type: Number,
-    required: true,
-    min: 0,
-    default: 0
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    validate: {
+      min: 0
+    }
   },
   categoria_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Categoria',
-    required: true
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'categorias',
+      key: 'id'
+    }
   },
   subcategoria_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Subcategoria'
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'subcategorias',
+      key: 'id'
+    }
   },
   imagem_principal: {
-    type: String,
-    required: true
+    type: DataTypes.STRING(255),
+    allowNull: false
   },
-  imagens_secundarias: [{
-    type: String
-  }],
   destaque: {
-    type: Boolean,
-    default: false
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
   },
   data_cadastro: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
-}, { timestamps: true });
-
-// Indexes para melhorar performance nas consultas
-ProdutoSchema.index({ nome: 'text', descricao: 'text' });
-ProdutoSchema.index({ categoria_id: 1 });
-ProdutoSchema.index({ subcategoria_id: 1 });
-ProdutoSchema.index({ preco: 1 });
-ProdutoSchema.index({ destaque: 1 });
-
-// Middleware para validar estoque não negativo
-ProdutoSchema.pre('save', function(next) {
-  if (this.estoque < 0) {
-    throw new Error('Estoque não pode ser negativo');
-  }
-  next();
+}, {
+  tableName: 'produtos',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
-module.exports = mongoose.model('Produto', ProdutoSchema);
+// Definir associações
+Produto.belongsTo(Categoria, { foreignKey: 'categoria_id' });
+Produto.belongsTo(Subcategoria, { foreignKey: 'subcategoria_id' });
+Categoria.hasMany(Produto, { foreignKey: 'categoria_id' });
+Subcategoria.hasMany(Produto, { foreignKey: 'subcategoria_id' });
+
+module.exports = Produto;

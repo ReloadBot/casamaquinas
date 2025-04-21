@@ -1,123 +1,179 @@
-const Usuario = require('../models/Usuario');
-const bcrypt = require('bcryptjs');
+// Exemplo de controlador atualizado para Usuários usando Sequelize
+const { Usuario } = require('../models');
 const jwt = require('jsonwebtoken');
-const Cliente = require('../models/Cliente');
+const logger = require('../utils/logger');
 
-const listarUsuarios = async (req, res) => {
+// @desc    Registrar um novo usuário
+// @route   POST /api/usuarios
+// @access  Público
+exports.registrarUsuario = async (req, res) => {
   try {
-    const usuarios = await Usuario.find().select('-senha');
-    res.json(usuarios);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
-  }
-};
+    const { nome, email, senha, tipo } = req.body;
 
-const obterUsuario = async (req, res) => {
-  try {
-    const usuario = await Usuario.findById(req.params.id).select('-senha');
-    if (!usuario) {
-      return res.status(404).json({ msg: 'Usuário não encontrado' });
+    // Verificar se o usuário já existe
+    const usuarioExistente = await Usuario.findOne({ where: { email } });
+    if (usuarioExistente) {
+      return res.status(400).json({ message: 'Usuário já existe' });
     }
 
-    if (usuario.tipo === 'cliente') {
-      const cliente = await Cliente.findOne({ usuario_id: usuario._id });
-      return res.json({ usuario, cliente });
-    }
+    // Criar o usuário
+    const usuario = await Usuario.create({
+      nome,
+      email,
+      senha,
+      tipo: tipo || 'cliente'
+    });
 
-    res.json(usuario);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
-  }
-};
+    // Gerar token JWT
+    const token = jwt.sign(
+      { id: usuario.id, tipo: usuario.tipo },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE }
+    );
 
-const atualizarUsuario = async (req, res) => {
-  const { nome, email, tipo, senha } = req.body;
-
-  try {
-    let usuario = await Usuario.findById(req.params.id);
-    if (!usuario) {
-      return res.status(404).json({ msg: 'Usuário não encontrado' });
-    }
-
-    if (email && email !== usuario.email) {
-      const usuarioExistente = await Usuario.findOne({ email });
-      if (usuarioExistente) {
-        return res.status(400).json({ msg: 'Email já está em uso' });
+    res.status(201).json({
+      success: true,
+      token,
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        tipo: usuario.tipo
       }
-      usuario.email = email;
+    });
+  } catch (err) {
+    logger.error(`Erro ao registrar usuário: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao registrar usuário', error: err.message });
+  }
+};
+
+// @desc    Login de usuário
+// @route   POST /api/usuarios/login
+// @access  Público
+exports.loginUsuario = async (req, res) => {
+  try {
+    const { email, senha } = req.body;
+
+    // Verificar se o usuário existe
+    const usuario = await Usuario.findOne({ 
+      where: { email },
+      attributes: { include: ['senha'] } // Incluir o campo senha que normalmente é excluído
+    });
+
+    if (!usuario) {
+      return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
-    usuario.nome = nome || usuario.nome;
-    usuario.tipo = tipo || usuario.tipo;
-
-    if (senha) {
-      const salt = await bcrypt.genSalt(10);
-      usuario.senha = await bcrypt.hash(senha, salt);
+    // Verificar senha
+    const senhaCorreta = await usuario.compararSenha(senha);
+    if (!senhaCorreta) {
+      return res.status(401).json({ message: 'Credenciais inválidas' });
     }
+
+    // Atualizar último acesso
+    usuario.ultimo_acesso = new Date();
+    await usuario.save();
+
+    // Gerar token JWT
+    const token = jwt.sign(
+      { id: usuario.id, tipo: usuario.tipo },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE }
+    );
+
+    res.status(200).json({
+      success: true,
+      token,
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        tipo: usuario.tipo
+      }
+    });
+  } catch (err) {
+    logger.error(`Erro no login: ${err.message}`);
+    res.status(500).json({ message: 'Erro no login', error: err.message });
+  }
+};
+
+// @desc    Obter perfil do usuário atual
+// @route   GET /api/usuarios/perfil
+// @access  Privado
+exports.getPerfilUsuario = async (req, res) => {
+  try {
+    const usuario = await Usuario.findByPk(req.usuario.id, {
+      attributes: { exclude: ['senha'] }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    res.status(200).json({
+      success: true,
+      usuario
+    });
+  } catch (err) {
+    logger.error(`Erro ao obter perfil: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao obter perfil', error: err.message });
+  }
+};
+
+// @desc    Atualizar perfil do usuário
+// @route   PUT /api/usuarios/perfil
+// @access  Privado
+exports.atualizarPerfilUsuario = async (req, res) => {
+  try {
+    const usuario = await Usuario.findByPk(req.usuario.id);
+
+    if (!usuario) {
+      return res.status(404).json({ message: 'Usuário não encontrado' });
+    }
+
+    // Atualizar campos
+    if (req.body.nome) usuario.nome = req.body.nome;
+    if (req.body.email) usuario.email = req.body.email;
+    if (req.body.senha) usuario.senha = req.body.senha;
 
     await usuario.save();
 
-    const usuarioAtualizado = await Usuario.findById(usuario._id).select('-senha');
-    res.json(usuarioAtualizado);
-
+    res.status(200).json({
+      success: true,
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        tipo: usuario.tipo
+      }
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao atualizar perfil: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao atualizar perfil', error: err.message });
   }
 };
 
-const deletarUsuario = async (req, res) => {
+// @desc    Listar todos os usuários (apenas admin)
+// @route   GET /api/usuarios
+// @access  Privado/Admin
+exports.listarUsuarios = async (req, res) => {
   try {
-    const usuario = await Usuario.findById(req.params.id);
-    if (!usuario) {
-      return res.status(404).json({ msg: 'Usuário não encontrado' });
+    // Verificar se é admin
+    if (req.usuario.tipo !== 'admin') {
+      return res.status(403).json({ message: 'Acesso não autorizado' });
     }
 
-    if (usuario.tipo === 'cliente') {
-      await Cliente.findOneAndDelete({ usuario_id: usuario._id });
-    }
+    const usuarios = await Usuario.findAll({
+      attributes: { exclude: ['senha'] }
+    });
 
-    await Usuario.findByIdAndDelete(req.params.id);
-    res.json({ msg: 'Usuário removido com sucesso' });
-
+    res.status(200).json({
+      success: true,
+      count: usuarios.length,
+      usuarios
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao listar usuários: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao listar usuários', error: err.message });
   }
-};
-
-const alterarSenha = async (req, res) => {
-  const { senhaAtual, novaSenha } = req.body;
-
-  try {
-    const usuario = await Usuario.findById(req.usuario.id);
-    if (!usuario) {
-      return res.status(404).json({ msg: 'Usuário não encontrado' });
-    }
-
-    const isMatch = await bcrypt.compare(senhaAtual, usuario.senha);
-    if (!isMatch) {
-      return res.status(400).json({ msg: 'Senha atual incorreta' });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    usuario.senha = await bcrypt.hash(novaSenha, salt);
-    await usuario.save();
-
-    res.json({ msg: 'Senha alterada com sucesso' });
-
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
-  }
-};
-
-module.exports = {
-  listarUsuarios,
-  obterUsuario,
-  atualizarUsuario,
-  deletarUsuario,
-  alterarSenha
 };

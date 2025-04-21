@@ -1,53 +1,59 @@
-const mongoose = require('mongoose');
+// Modelo Pedido usando Sequelize
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
+const Cliente = require('./Cliente');
 
-const PedidoSchema = new mongoose.Schema({
-  cliente_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Cliente',
-    required: true
+const Pedido = sequelize.define('Pedido', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
   },
-  itens: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'PedidoItem'
-  }],
+  cliente_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'clientes',
+      key: 'id'
+    }
+  },
   data_pedido: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
   status: {
-    type: String,
-    enum: ['pendente', 'pago', 'enviado', 'entregue', 'cancelado'],
-    default: 'pendente'
+    type: DataTypes.ENUM('pendente', 'pago', 'enviado', 'entregue', 'cancelado'),
+    defaultValue: 'pendente'
   },
   valor_total: {
-    type: Number,
-    required: true,
-    min: 0
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false
   },
   metodo_pagamento: {
-    type: String
+    type: DataTypes.STRING(50),
+    allowNull: true
   },
   id_pagamento: {
-    type: String
+    type: DataTypes.STRING(100),
+    allowNull: true
   },
   endereco_entrega: {
-    type: String,
-    required: true
+    type: DataTypes.STRING(255),
+    allowNull: false
   },
   rastreamento: {
-    type: String
+    type: DataTypes.STRING(100),
+    allowNull: true
   }
-}, { timestamps: true });
-
-// Index para melhorar consultas por cliente e status
-PedidoSchema.index({ cliente_id: 1 });
-PedidoSchema.index({ status: 1 });
-PedidoSchema.index({ data_pedido: -1 });
-
-// Middleware para remover itens relacionados quando um pedido é removido
-PedidoSchema.pre('remove', async function(next) {
-  await this.model('PedidoItem').deleteMany({ pedido_id: this._id });
-  next();
+}, {
+  tableName: 'pedidos',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
 });
 
-module.exports = mongoose.model('Pedido', PedidoSchema);
+// Definir associações
+Pedido.belongsTo(Cliente, { foreignKey: 'cliente_id' });
+Cliente.hasMany(Pedido, { foreignKey: 'cliente_id' });
+
+module.exports = Pedido;

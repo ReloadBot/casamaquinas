@@ -1,36 +1,33 @@
-const mongoose = require('mongoose');
+// Modelo Categoria usando Sequelize
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 
-const CategoriaSchema = new mongoose.Schema({
+const Categoria = sequelize.define('Categoria', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   nome: {
-    type: String,
-    required: true,
-    trim: true,
-    unique: true,
-    maxlength: 50
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    unique: true
   },
   descricao: {
-    type: String,
-    trim: true,
-    maxlength: 500
+    type: DataTypes.STRING(500),
+    allowNull: true
   },
   imagem: {
-    type: String,
-    trim: true
+    type: DataTypes.STRING(255),
+    allowNull: true
   },
-  subcategorias: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Subcategoria'
-  }],
   data_criacao: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
+}, {
+  tableName: 'categorias',
+  timestamps: false
 });
 
-// Middleware para remover subcategorias relacionadas quando uma categoria é removida
-CategoriaSchema.pre('remove', async function(next) {
-  await this.model('Subcategoria').deleteMany({ categoria_id: this._id });
-  next();
-});
-
-module.exports = mongoose.model('Categoria', CategoriaSchema);
+module.exports = Categoria;

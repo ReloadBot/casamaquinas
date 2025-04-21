@@ -16,7 +16,9 @@
     "jsonwebtoken": "^9.0.0",
     "mercadopago": "^1.5.14",
     "mongoose": "^7.0.3",
+    "mysql2": "^3.14.0",
     "nodemailer": "^6.9.1",
+    "sequelize": "^6.37.7",
     "validator": "^13.9.0"
   },
   "devDependencies": {

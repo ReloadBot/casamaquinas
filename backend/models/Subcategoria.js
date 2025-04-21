@@ -1,42 +1,43 @@
-const mongoose = require('mongoose');
+// Modelo Subcategoria usando Sequelize
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
+const Categoria = require('./Categoria');
 
-const SubcategoriaSchema = new mongoose.Schema({
+const Subcategoria = sequelize.define('Subcategoria', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   nome: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 50
+    type: DataTypes.STRING(50),
+    allowNull: false
   },
   categoria_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Categoria',
-    required: true
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'categorias',
+      key: 'id'
+    }
   },
   data_criacao: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
+}, {
+  tableName: 'subcategorias',
+  timestamps: false,
+  indexes: [
+    {
+      unique: true,
+      fields: ['nome', 'categoria_id']
+    }
+  ]
 });
 
-// Índices para otimização
-SubcategoriaSchema.index({ nome: 1, categoria_id: 1 }, { unique: true });
-SubcategoriaSchema.index({ categoria_id: 1 });
+// Definir associação com Categoria
+Subcategoria.belongsTo(Categoria, { foreignKey: 'categoria_id' });
+Categoria.hasMany(Subcategoria, { foreignKey: 'categoria_id' });
 
-// Middleware para remover referência da categoria pai quando subcategoria é removida
-SubcategoriaSchema.pre('remove', async function(next) {
-  await this.model('Categoria').updateOne(
-    { _id: this.categoria_id },
-    { $pull: { subcategorias: this._id } }
-  );
-  next();
-});
-
-// Middleware para adicionar referência na categoria pai quando subcategoria é criada
-SubcategoriaSchema.post('save', async function(doc) {
-  await this.model('Categoria').updateOne(
-    { _id: doc.categoria_id },
-    { $addToSet: { subcategorias: doc._id } }
-  );
-});
-
-module.exports = mongoose.model('Subcategoria', SubcategoriaSchema);
+module.exports = Subcategoria;

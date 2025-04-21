@@ -1,29 +1,133 @@
-const Produto = require('../models/Produto');
-const Categoria = require('../models/Categoria');
-const Subcategoria = require('../models/Subcategoria');
+// Exemplo de controlador atualizado para Produtos usando Sequelize
+const { Produto, Categoria, Subcategoria, ProdutoImagem } = require('../models');
+const logger = require('../utils/logger');
 
-const criarProduto = async (req, res) => {
-  const { nome, descricao, preco, estoque, categoria_id, subcategoria_id, imagem_principal, imagens_secundarias } = req.body;
-
+// @desc    Listar todos os produtos
+// @route   GET /api/produtos
+// @access  Público
+exports.listarProdutos = async (req, res) => {
   try {
-    // Verificar se categoria existe
-    const categoria = await Categoria.findById(categoria_id);
-    if (!categoria) {
-      return res.status(400).json({ msg: 'Categoria não encontrada' });
+    const { categoria, subcategoria, destaque, busca, limite = 10, pagina = 1 } = req.query;
+    
+    // Configurar opções de consulta
+    const options = {
+      include: [
+        { model: Categoria, attributes: ['id', 'nome'] },
+        { model: Subcategoria, attributes: ['id', 'nome'] },
+        { model: ProdutoImagem, as: 'imagens_secundarias', attributes: ['id', 'imagem'] }
+      ],
+      order: [['data_cadastro', 'DESC']],
+      limit: parseInt(limite),
+      offset: (parseInt(pagina) - 1) * parseInt(limite)
+    };
+    
+    // Adicionar filtros se fornecidos
+    const where = {};
+    
+    if (categoria) {
+      where.categoria_id = categoria;
     }
+    
+    if (subcategoria) {
+      where.subcategoria_id = subcategoria;
+    }
+    
+    if (destaque === 'true') {
+      where.destaque = true;
+    }
+    
+    if (busca) {
+      where[Sequelize.Op.or] = [
+        { nome: { [Sequelize.Op.like]: `%${busca}%` } },
+        { descricao: { [Sequelize.Op.like]: `%${busca}%` } }
+      ];
+    }
+    
+    if (Object.keys(where).length > 0) {
+      options.where = where;
+    }
+    
+    // Executar consulta
+    const produtos = await Produto.findAndCountAll(options);
+    
+    res.status(200).json({
+      success: true,
+      count: produtos.count,
+      totalPaginas: Math.ceil(produtos.count / parseInt(limite)),
+      paginaAtual: parseInt(pagina),
+      produtos: produtos.rows
+    });
+  } catch (err) {
+    logger.error(`Erro ao listar produtos: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao listar produtos', error: err.message });
+  }
+};
 
-    // Verificar se subcategoria existe e pertence à categoria
+// @desc    Obter um produto pelo ID
+// @route   GET /api/produtos/:id
+// @access  Público
+exports.getProduto = async (req, res) => {
+  try {
+    const produto = await Produto.findByPk(req.params.id, {
+      include: [
+        { model: Categoria, attributes: ['id', 'nome'] },
+        { model: Subcategoria, attributes: ['id', 'nome'] },
+        { model: ProdutoImagem, as: 'imagens_secundarias', attributes: ['id', 'imagem'] }
+      ]
+    });
+    
+    if (!produto) {
+      return res.status(404).json({ message: 'Produto não encontrado' });
+    }
+    
+    res.status(200).json({
+      success: true,
+      produto
+    });
+  } catch (err) {
+    logger.error(`Erro ao obter produto: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao obter produto', error: err.message });
+  }
+};
+
+// @desc    Criar um novo produto
+// @route   POST /api/produtos
+// @access  Privado/Admin
+exports.criarProduto = async (req, res) => {
+  try {
+    // Verificar se é admin
+    if (req.usuario.tipo !== 'admin') {
+      return res.status(403).json({ message: 'Acesso não autorizado' });
+    }
+    
+    const { 
+      nome, 
+      descricao, 
+      preco, 
+      estoque, 
+      categoria_id, 
+      subcategoria_id, 
+      imagem_principal, 
+      imagens_secundarias, 
+      destaque 
+    } = req.body;
+    
+    // Verificar se a categoria existe
+    const categoria = await Categoria.findByPk(categoria_id);
+    if (!categoria) {
+      return res.status(400).json({ message: 'Categoria não encontrada' });
+    }
+    
+    // Verificar se a subcategoria existe (se fornecida)
     if (subcategoria_id) {
-      const subcategoria = await Subcategoria.findOne({ 
-        _id: subcategoria_id, 
-        categoria_id: categoria_id 
-      });
+      const subcategoria = await Subcategoria.findByPk(subcategoria_id);
       if (!subcategoria) {
-        return res.status(400).json({ msg: 'Subcategoria não encontrada ou não pertence à categoria' });
+        return res.status(400).json({ message: 'Subcategoria não encontrada' });
       }
     }
-
-    const novoProduto = new Produto({
+    
+    // Criar o produto
+    const produto = await Produto.create({
       nome,
       descricao,
       preco,
@@ -31,131 +135,135 @@ const criarProduto = async (req, res) => {
       categoria_id,
       subcategoria_id,
       imagem_principal,
-      imagens_secundarias: imagens_secundarias || []
+      destaque: destaque || false
     });
-
-    await novoProduto.save();
-    res.status(201).json(novoProduto);
-
+    
+    // Adicionar imagens secundárias (se fornecidas)
+    if (imagens_secundarias && imagens_secundarias.length > 0) {
+      const imagensPromises = imagens_secundarias.map(imagem => 
+        ProdutoImagem.create({
+          produto_id: produto.id,
+          imagem
+        })
+      );
+      
+      await Promise.all(imagensPromises);
+    }
+    
+    // Buscar o produto completo com as relações
+    const produtoCompleto = await Produto.findByPk(produto.id, {
+      include: [
+        { model: Categoria, attributes: ['id', 'nome'] },
+        { model: Subcategoria, attributes: ['id', 'nome'] },
+        { model: ProdutoImagem, as: 'imagens_secundarias', attributes: ['id', 'imagem'] }
+      ]
+    });
+    
+    res.status(201).json({
+      success: true,
+      produto: produtoCompleto
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao criar produto: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao criar produto', error: err.message });
   }
 };
 
-const listarProdutos = async (req, res) => {
+// @desc    Atualizar um produto
+// @route   PUT /api/produtos/:id
+// @access  Privado/Admin
+exports.atualizarProduto = async (req, res) => {
   try {
-    const { categoria, subcategoria, busca, limite, pagina } = req.query;
-    const filtro = {};
-
-    if (categoria) filtro.categoria_id = categoria;
-    if (subcategoria) filtro.subcategoria_id = subcategoria;
-    if (busca) filtro.nome = { $regex: busca, $options: 'i' };
-
-    const options = {
-      page: parseInt(pagina) || 1,
-      limit: parseInt(limite) || 10,
-      populate: ['categoria_id', 'subcategoria_id'],
-      sort: { data_cadastro: -1 }
-    };
-
-    const produtos = await Produto.paginate(filtro, options);
-    res.json(produtos);
-
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
-  }
-};
-
-const obterProduto = async (req, res) => {
-  try {
-    const produto = await Produto.findById(req.params.id)
-      .populate('categoria_id')
-      .populate('subcategoria_id');
-
+    // Verificar se é admin
+    if (req.usuario.tipo !== 'admin') {
+      return res.status(403).json({ message: 'Acesso não autorizado' });
+    }
+    
+    const produto = await Produto.findByPk(req.params.id);
+    
     if (!produto) {
-      return res.status(404).json({ msg: 'Produto não encontrado' });
+      return res.status(404).json({ message: 'Produto não encontrado' });
     }
-
-    res.json(produto);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
-  }
-};
-
-const atualizarProduto = async (req, res) => {
-  const { nome, descricao, preco, estoque, categoria_id, subcategoria_id, imagem_principal, imagens_secundarias } = req.body;
-
-  try {
-    // Verificar se produto existe
-    const produto = await Produto.findById(req.params.id);
-    if (!produto) {
-      return res.status(404).json({ msg: 'Produto não encontrado' });
-    }
-
-    // Verificar se categoria existe
-    if (categoria_id) {
-      const categoria = await Categoria.findById(categoria_id);
-      if (!categoria) {
-        return res.status(400).json({ msg: 'Categoria não encontrada' });
-      }
-    }
-
-    // Verificar se subcategoria existe e pertence à categoria
-    if (subcategoria_id) {
-      const subcategoria = await Subcategoria.findOne({ 
-        _id: subcategoria_id, 
-        categoria_id: categoria_id || produto.categoria_id 
-      });
-      if (!subcategoria) {
-        return res.status(400).json({ msg: 'Subcategoria não encontrada ou não pertence à categoria' });
-      }
-    }
-
+    
     // Atualizar campos
-    produto.nome = nome || produto.nome;
-    produto.descricao = descricao || produto.descricao;
-    produto.preco = preco || produto.preco;
-    produto.estoque = estoque !== undefined ? estoque : produto.estoque;
-    produto.categoria_id = categoria_id || produto.categoria_id;
-    produto.subcategoria_id = subcategoria_id !== undefined ? subcategoria_id : produto.subcategoria_id;
-    produto.imagem_principal = imagem_principal || produto.imagem_principal;
-    produto.imagens_secundarias = imagens_secundarias || produto.imagens_secundarias;
-
+    const campos = [
+      'nome', 'descricao', 'preco', 'estoque', 
+      'categoria_id', 'subcategoria_id', 'imagem_principal', 'destaque'
+    ];
+    
+    campos.forEach(campo => {
+      if (req.body[campo] !== undefined) {
+        produto[campo] = req.body[campo];
+      }
+    });
+    
     await produto.save();
-
-    const produtoAtualizado = await Produto.findById(req.params.id)
-      .populate('categoria_id')
-      .populate('subcategoria_id');
-
-    res.json(produtoAtualizado);
-
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
-  }
-};
-
-const deletarProduto = async (req, res) => {
-  try {
-    const produto = await Produto.findByIdAndDelete(req.params.id);
-    if (!produto) {
-      return res.status(404).json({ msg: 'Produto não encontrado' });
+    
+    // Atualizar imagens secundárias (se fornecidas)
+    if (req.body.imagens_secundarias) {
+      // Remover imagens existentes
+      await ProdutoImagem.destroy({ where: { produto_id: produto.id } });
+      
+      // Adicionar novas imagens
+      if (req.body.imagens_secundarias.length > 0) {
+        const imagensPromises = req.body.imagens_secundarias.map(imagem => 
+          ProdutoImagem.create({
+            produto_id: produto.id,
+            imagem
+          })
+        );
+        
+        await Promise.all(imagensPromises);
+      }
     }
-
-    res.json({ msg: 'Produto removido com sucesso' });
+    
+    // Buscar o produto atualizado com as relações
+    const produtoAtualizado = await Produto.findByPk(produto.id, {
+      include: [
+        { model: Categoria, attributes: ['id', 'nome'] },
+        { model: Subcategoria, attributes: ['id', 'nome'] },
+        { model: ProdutoImagem, as: 'imagens_secundarias', attributes: ['id', 'imagem'] }
+      ]
+    });
+    
+    res.status(200).json({
+      success: true,
+      produto: produtoAtualizado
+    });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao atualizar produto: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao atualizar produto', error: err.message });
   }
 };
 
-module.exports = {
-  criarProduto,
-  listarProdutos,
-  obterProduto,
-  atualizarProduto,
-  deletarProduto
+// @desc    Excluir um produto
+// @route   DELETE /api/produtos/:id
+// @access  Privado/Admin
+exports.excluirProduto = async (req, res) => {
+  try {
+    // Verificar se é admin
+    if (req.usuario.tipo !== 'admin') {
+      return res.status(403).json({ message: 'Acesso não autorizado' });
+    }
+    
+    const produto = await Produto.findByPk(req.params.id);
+    
+    if (!produto) {
+      return res.status(404).json({ message: 'Produto não encontrado' });
+    }
+    
+    // Remover imagens secundárias
+    await ProdutoImagem.destroy({ where: { produto_id: produto.id } });
+    
+    // Remover o produto
+    await produto.destroy();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Produto removido com sucesso'
+    });
+  } catch (err) {
+    logger.error(`Erro ao excluir produto: ${err.message}`);
+    res.status(500).json({ message: 'Erro ao excluir produto', error: err.message });
+  }
 };

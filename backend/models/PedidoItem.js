@@ -1,32 +1,67 @@
-const mongoose = require('mongoose');
+// Modelo PedidoItem usando Sequelize
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
+const Pedido = require('./Pedido');
+const Produto = require('./Produto');
 
-const PedidoItemSchema = new mongoose.Schema({
-  produto: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Produto',
-    required: true
+const PedidoItem = sequelize.define('PedidoItem', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
+  pedido_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'pedidos',
+      key: 'id'
+    }
+  },
+  produto_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'produtos',
+      key: 'id'
+    }
   },
   quantidade: {
-    type: Number,
-    required: true,
-    min: 1
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    validate: {
+      min: 1
+    }
   },
-  precoUnitario: {
-    type: Number,
-    required: true,
-    min: 0
+  preco_unitario: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false
   },
   subtotal: {
-    type: Number,
-    required: true,
-    min: 0
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false
   }
-}, { timestamps: true });
-
-// Calcular subtotal antes de salvar
-PedidoItemSchema.pre('save', function(next) {
-  this.subtotal = this.quantidade * this.precoUnitario;
-  next();
+}, {
+  tableName: 'pedido_itens',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  hooks: {
+    beforeCreate: (item) => {
+      item.subtotal = item.quantidade * item.preco_unitario;
+    },
+    beforeUpdate: (item) => {
+      if (item.changed('quantidade') || item.changed('preco_unitario')) {
+        item.subtotal = item.quantidade * item.preco_unitario;
+      }
+    }
+  }
 });
 
-module.exports = mongoose.model('PedidoItem', PedidoItemSchema);
+// Definir associações
+PedidoItem.belongsTo(Pedido, { foreignKey: 'pedido_id' });
+PedidoItem.belongsTo(Produto, { foreignKey: 'produto_id' });
+Pedido.hasMany(PedidoItem, { foreignKey: 'pedido_id', as: 'itens' });
+Produto.hasMany(PedidoItem, { foreignKey: 'produto_id' });
+
+module.exports = PedidoItem;

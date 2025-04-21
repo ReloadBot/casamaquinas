@@ -1,65 +1,70 @@
-const mongoose = require('mongoose');
+// Modelo Usuario usando Sequelize
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/db');
 const bcrypt = require('bcryptjs');
 
-const UsuarioSchema = new mongoose.Schema({
+const Usuario = sequelize.define('Usuario', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   nome: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 100
+    type: DataTypes.STRING(100),
+    allowNull: false
   },
   email: {
-    type: String,
-    required: true,
+    type: DataTypes.STRING(100),
+    allowNull: false,
     unique: true,
-    trim: true,
-    lowercase: true,
-    match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Email inválido']
+    validate: {
+      isEmail: true
+    }
   },
   senha: {
-    type: String,
-    required: true,
-    minlength: 6,
-    select: false
+    type: DataTypes.STRING(255),
+    allowNull: false
   },
   tipo: {
-    type: String,
-    enum: ['admin', 'cliente'],
-    default: 'cliente'
+    type: DataTypes.ENUM('admin', 'cliente'),
+    defaultValue: 'cliente'
   },
   data_cadastro: {
-    type: Date,
-    default: Date.now
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
   ultimo_acesso: {
-    type: Date
+    type: DataTypes.DATE,
+    allowNull: true
   },
   ativo: {
-    type: Boolean,
-    default: true
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
   }
-}, { timestamps: true });
-
-// Middleware para hash da senha antes de salvar
-UsuarioSchema.pre('save', async function(next) {
-  if (!this.isModified('senha')) return next();
-  
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.senha = await bcrypt.hash(this.senha, salt);
-    next();
-  } catch (err) {
-    next(err);
+}, {
+  tableName: 'usuarios',
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  hooks: {
+    beforeCreate: async (usuario) => {
+      if (usuario.senha) {
+        const salt = await bcrypt.genSalt(10);
+        usuario.senha = await bcrypt.hash(usuario.senha, salt);
+      }
+    },
+    beforeUpdate: async (usuario) => {
+      if (usuario.changed('senha')) {
+        const salt = await bcrypt.genSalt(10);
+        usuario.senha = await bcrypt.hash(usuario.senha, salt);
+      }
+    }
   }
 });
 
 // Método para comparar senhas
-UsuarioSchema.methods.compararSenha = async function(senha) {
+Usuario.prototype.compararSenha = async function(senha) {
   return await bcrypt.compare(senha, this.senha);
 };
 
-// Indexes
-UsuarioSchema.index({ email: 1 });
-UsuarioSchema.index({ tipo: 1 });
-
-module.exports = mongoose.model('Usuario', UsuarioSchema);
+module.exports = Usuario;
