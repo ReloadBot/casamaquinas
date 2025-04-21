@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const Usuario = require('../models/Usuario');
 const Cliente = require('../models/Cliente');
 const { generateToken } = require('../utils/auth');
+const logger = require('../utils/logger');
 
 const register = async (req, res) => {
   // Aceitar tanto 'senha' quanto 'password'
@@ -31,15 +32,22 @@ const register = async (req, res) => {
     
     // Se for cliente, criar registro na tabela de clientes
     if (tipo === 'cliente' || !tipo) {
-      await Cliente.create({
-        usuario_id: usuario.id,
-        cpf,
-        telefone,
-        endereco,
-        cidade,
-        estado,
-        cep
-      });
+      try {
+        await Cliente.create({
+          usuario_id: usuario.id,
+          cpf: cpf || null,
+          telefone: telefone || null,
+          endereco: endereco || null,
+          cidade: cidade || null,
+          estado: estado || null,
+          cep: cep || null
+        });
+      } catch (clienteErr) {
+        // Se houver erro ao criar o cliente, remover o usuário criado
+        await usuario.destroy();
+        logger.error(`Erro ao criar cliente: ${clienteErr.message}`);
+        return res.status(400).json({ msg: 'Erro ao criar perfil de cliente', error: clienteErr.message });
+      }
     }
     
     // Gerar token JWT
@@ -55,8 +63,8 @@ const register = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao registrar usuário: ${err.message}`);
+    res.status(500).json({ msg: 'Erro no servidor', error: err.message });
   }
 };
 
@@ -98,8 +106,8 @@ const login = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao fazer login: ${err.message}`);
+    res.status(500).json({ msg: 'Erro no servidor', error: err.message });
   }
 };
 
@@ -116,8 +124,8 @@ const getUsuario = async (req, res) => {
     
     res.json(usuario);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao obter usuário: ${err.message}`);
+    res.status(500).json({ msg: 'Erro no servidor', error: err.message });
   }
 };
 
@@ -155,8 +163,8 @@ const updateUsuario = async (req, res) => {
       tipo: usuario.tipo
     });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Erro no servidor');
+    logger.error(`Erro ao atualizar usuário: ${err.message}`);
+    res.status(500).json({ msg: 'Erro no servidor', error: err.message });
   }
 };
 

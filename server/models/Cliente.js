@@ -20,7 +20,12 @@ const Cliente = sequelize.define('Cliente', {
   cpf: {
     type: DataTypes.STRING(14),
     allowNull: true,
-    unique: true
+    unique: {
+      args: true,
+      msg: 'Este CPF já está cadastrado',
+      // Permitir múltiplos valores NULL
+      name: 'clientes_cpf_unique_constraint'
+    }
   },
   telefone: {
     type: DataTypes.STRING(20),
